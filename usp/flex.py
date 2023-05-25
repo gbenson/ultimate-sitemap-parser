@@ -41,7 +41,7 @@ class FlexingSocketModule:
                 msg = f"{msg} (canonname = {canonname!r})"
             print(msg)
             #yield res
-        sys.exit(0)
+        raise StopFlexing
 
 
 class FlexingSocketConnectionFactory:
@@ -98,6 +98,10 @@ class FlexingWebClient(AbstractWebClient):
         raise NotImplementedError
 
 
+class StopFlexing(Exception):
+    pass
+
+
 def flex(test_url):
     """Flex Ultimate Sitemap Parser's robots.txt parser.
     """
@@ -108,19 +112,28 @@ def flex(test_url):
         content=f"sitemap:{test_url}",
         recursion_level=0,
         web_client=web_client)
-    parser.sitemap()
-    raise NotImplementedError
+    try:
+        parser.sitemap()
+    except StopFlexing:
+        pass
 
 
-def main(test_url=None):
-    if test_url is None:
-        [test_url] = sys.argv[1:]
+def main(test_urls=None):
+    if test_urls is None:
+        test_urls = sys.argv[1:]
+    if not test_urls:
+        print("usage: flex URL...", file=sys.stderr)
+        return 1
 
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(levelname)s: [%(name)s] %(message)s")
 
-    flex(test_url)
+    for i, test_url in enumerate(test_urls):
+        if i != 0:
+            sys.stderr.write("\n")  # XXX make log go to stdout
+        flex(test_url)
+        print("end of flex")
 
 
 if __name__ == "__main__":
