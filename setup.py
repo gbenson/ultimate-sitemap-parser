@@ -54,7 +54,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "flex = usp.flex:main",
+            "flex = usp._flex:main",
         ],
     },
     classifiers=[

@@ -1,3 +1,4 @@
+import logging
 import requests
 
 from requests.adapters import HTTPAdapter as RequestsHttpAdapter
@@ -52,6 +53,9 @@ def flex_with(test_url):
 
 
 def main():
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(levelname)s: [%(name)s] %(funcName)s: %(message)s")
     flex_with("http://customer.com#@evil.com")
 
 
