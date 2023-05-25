@@ -6,10 +6,6 @@ from requests.adapters import HTTPAdapter as RequestsHttpAdapter
 from usp.fetch_parse import IndexRobotsTxtSitemapParser
 from usp.log import create_logger
 from usp.web_client.abstract_client import AbstractWebClient
-from usp.web_client.requests_client import (
-    RequestsWebClientErrorResponse,
-    RequestsWebClientSuccessResponse,
-)
 
 logger = create_logger(__name__)
 print = logger.info
