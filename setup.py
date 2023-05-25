@@ -52,6 +52,11 @@ setup(
     extras_require={
         'test': tests_require,
     },
+    entry_points={
+        "console_scripts": [
+            "flex = usp.flex:main",
+        ],
+    },
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
