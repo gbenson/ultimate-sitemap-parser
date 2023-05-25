@@ -1,5 +1,6 @@
 import logging
 import requests
+import sys
 
 from requests.adapters import HTTPAdapter as RequestsHttpAdapter
 
@@ -11,19 +12,55 @@ logger = create_logger(__name__)
 print = logger.info
 
 
-class FlexingAdapter(RequestsHttpAdapter):
+class FlexingSocketModule:
+    def __init__(self, socket_module):
+        self._socket_module = socket_module
+
+
+class FlexingSocketConnectionFactory:
+    def __init__(self, new_conn):
+        self._new_conn = new_conn
+
+    def __call__(self, *args, **kwargs):
+        conn = self._new_conn.__self__
+        conn_module = sys.modules[conn.__class__.__module__]
+        util_conn_module = conn_module.connection
+        socket_module = util_conn_module.socket
+        util_conn_module.socket = FlexingSocketModule(socket_module)
+        try:
+            return self._new_conn(*args, **kwargs)
+        finally:
+            util_conn_module.socket = socket_module
+
+
+class FlexingHTTPConnectionFactory:
+    def __init__(self, connection_class):
+        self._connection_class = connection_class
+
+    def __call__(self, *args, **kwargs):
+        conn = self._connection_class(*args, **kwargs)
+        conncls = conn.__class__
+        clsname = f"{conncls.__module__}.{conncls.__qualname__}"
+        print(f"{clsname}.__init__({conn.host!r}, {conn.port}, ...)")
+        conn._new_conn = FlexingSocketConnectionFactory(conn._new_conn)
+        return conn
+
+
+class FlexingHTTPAdapter(RequestsHttpAdapter):
     def get_connection(self, url, *args, **kwargs):
         print(f"adapter.get_connection: {url!r}")
-        raise NotImplementedError
+        pool = super().get_connection(url, *args, **kwargs)
+        conn_class = pool.ConnectionCls
+        pool.ConnectionCls = FlexingHTTPConnectionFactory(conn_class)
+        return pool
 
 
 class FlexingWebClient(AbstractWebClient):
     def __init__(self):
         self._session = requests.Session()
-        self._http_adapter = FlexingAdapter()
         self._max_response_data_length = None
         for prefix in list(self._session.adapters.keys()):
-            self._session.mount(prefix, self._http_adapter)
+            self._session.mount(prefix, FlexingHTTPAdapter())
 
     def set_max_response_data_length(self, max_response_data_length):
         self._max_response_data_length = max_response_data_length
@@ -51,7 +88,7 @@ def flex_with(test_url):
 def main():
     logging.basicConfig(
         level=logging.DEBUG,
-        format="%(levelname)s: [%(name)s] %(funcName)s: %(message)s")
+        format="%(levelname)s: [%(name)s] %(message)s")
     flex_with("http://customer.com#@evil.com")
 
 
