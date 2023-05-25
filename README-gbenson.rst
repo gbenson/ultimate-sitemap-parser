@@ -19,3 +19,7 @@ Install in editable mode::
 Test it::
 
   pytest
+
+Flex it::
+
+  flex 'http://customer.com#@evil.com'

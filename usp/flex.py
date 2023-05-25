@@ -1,5 +1,6 @@
 import logging
 import requests
+import socket
 import sys
 
 from requests.adapters import HTTPAdapter as RequestsHttpAdapter
@@ -15,6 +16,32 @@ print = logger.info
 class FlexingSocketModule:
     def __init__(self, socket_module):
         self._socket_module = socket_module
+
+    @property
+    def AF_INET(self):
+        return self._socket_module.AF_INET
+
+    @property
+    def AF_UNSPEC(self):
+        return self._socket_module.AF_UNSPEC
+
+    @property
+    def SOCK_STREAM(self):
+        return self._socket_module.SOCK_STREAM
+
+    def getaddrinfo(self, *args, **kwargs):
+        print(f"getaddrinfo({args[0]!r}, {args[1]}, ...) =>")
+        for res in self._socket_module.getaddrinfo(*args, **kwargs):
+            af, socktype, proto, canonname, sa = res
+            assert af == socket.AF_INET
+            assert socktype == socket.SOCK_STREAM
+            assert proto == socket.IPPROTO_TCP
+            msg = f"attempting connection to {sa}"
+            if canonname != "":
+                msg = f"{msg} (canonname = {canonname!r})"
+            print(msg)
+            #yield res
+        sys.exit(0)
 
 
 class FlexingSocketConnectionFactory:
@@ -71,7 +98,7 @@ class FlexingWebClient(AbstractWebClient):
         raise NotImplementedError
 
 
-def flex_with(test_url):
+def flex(test_url):
     """Flex Ultimate Sitemap Parser's robots.txt parser.
     """
     print(f"test_url: {test_url!r}")
@@ -85,11 +112,15 @@ def flex_with(test_url):
     raise NotImplementedError
 
 
-def main():
+def main(test_url=None):
+    if test_url is None:
+        [test_url] = sys.argv[1:]
+
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(levelname)s: [%(name)s] %(message)s")
-    flex_with("http://customer.com#@evil.com")
+
+    flex(test_url)
 
 
 if __name__ == "__main__":
