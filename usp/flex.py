@@ -1,9 +1,12 @@
+import errno
 import logging
+import os
 import requests
-import socket
 import sys
 
 from requests.adapters import HTTPAdapter as RequestsHttpAdapter
+
+from urllib3.exceptions import NewConnectionError
 
 from usp.fetch_parse import IndexRobotsTxtSitemapParser
 from usp.log import create_logger
@@ -13,35 +16,28 @@ logger = create_logger(__name__)
 print = logger.info
 
 
-class FlexingSocketModule:
-    def __init__(self, socket_module):
-        self._socket_module = socket_module
+def raise_oserror(code):
+    raise OSError(code, os.strerror(code))
 
-    @property
-    def AF_INET(self):
-        return self._socket_module.AF_INET
+hook_on = False
 
-    @property
-    def AF_UNSPEC(self):
-        return self._socket_module.AF_UNSPEC
+# https://www.gnu.org/software/libc/manual/html_node/Error-Codes.html
+# ECONNABORTED (Software caused connection abort)
+# A network connection was aborted locally.
+#                                  ^^^^^^^ (my emphasis)
+# N.B. this is not a sandbox, out hook can be overridden/rejected
 
-    @property
-    def SOCK_STREAM(self):
-        return self._socket_module.SOCK_STREAM
+def audit(event, args):
+    if not hook_on:
+        return
+    if not event.startswith("socket."):
+        return
+    print(f"audit: {event} with args={args}")
+    if event == "socket.connect":
+        print(f"audit: blocking {event} to {args[1]}")
+        raise_oserror(errno.ECONNABORTED)
 
-    def getaddrinfo(self, *args, **kwargs):
-        print(f"getaddrinfo({args[0]!r}, {args[1]}, ...) =>")
-        for res in self._socket_module.getaddrinfo(*args, **kwargs):
-            af, socktype, proto, canonname, sa = res
-            assert af == socket.AF_INET
-            assert socktype == socket.SOCK_STREAM
-            assert proto == socket.IPPROTO_TCP
-            msg = f"attempting connection to {sa}"
-            if canonname != "":
-                msg = f"{msg} (canonname = {canonname!r})"
-            print(msg)
-            #yield res
-        raise StopFlexing
+sys.addaudithook(audit)
 
 
 class FlexingSocketConnectionFactory:
@@ -49,15 +45,18 @@ class FlexingSocketConnectionFactory:
         self._new_conn = new_conn
 
     def __call__(self, *args, **kwargs):
-        conn = self._new_conn.__self__
-        conn_module = sys.modules[conn.__class__.__module__]
-        util_conn_module = conn_module.connection
-        socket_module = util_conn_module.socket
-        util_conn_module.socket = FlexingSocketModule(socket_module)
+        global hook_on
+        hook_on = True
         try:
             return self._new_conn(*args, **kwargs)
+        except NewConnectionError as e:
+            if isinstance(e.__cause__, ConnectionAbortedError):
+                print(f"audit smashed it: {e.__cause__}")
+            else:
+                raise
         finally:
-            util_conn_module.socket = socket_module
+            hook_on = False
+        raise StopFlexing
 
 
 class FlexingHTTPConnectionFactory:
